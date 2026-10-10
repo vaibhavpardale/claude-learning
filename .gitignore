@@ -1,0 +1,7 @@
+# Your personal task data
+todos.json
+
+# Python cache and temp files
+__pycache__/
+*.pyc
+*.tmp
