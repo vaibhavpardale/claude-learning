@@ -48,6 +48,35 @@ class TodoTests(unittest.TestCase):
         todo.main(["clear"])
         self.assertEqual(self.read_todos(), [{"text": "still open", "done": False}])
 
+    def test_corrupt_file_stops_without_overwriting(self):
+        self.file.write_text("{not json")
+        with self.assertRaises(SystemExit):
+            todo.main(["add", "new"])
+        self.assertEqual(self.file.read_text(), "{not json")
+
+    def test_empty_file_stops_with_message(self):
+        self.file.write_text("")
+        with self.assertRaises(SystemExit):
+            todo.main(["list"])
+
+    def test_entries_missing_fields_do_not_crash(self):
+        self.file.write_text(json.dumps([{"text": "x"}]))
+        todo.main(["list"])
+        todo.main(["done", "1"])
+        self.assertEqual(self.read_todos(), [{"text": "x", "done": True}])
+
+    def test_save_leaves_no_temp_files(self):
+        todo.main(["add", "buy milk"])
+        self.assertEqual([p.name for p in Path(self.tmp.name).iterdir()], ["todos.json"])
+
+    def test_failed_save_keeps_old_file(self):
+        todo.main(["add", "keep me"])
+        with mock.patch("todo.json.dump", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                todo.main(["add", "lost"])
+        self.assertEqual(self.read_todos(), [{"text": "keep me", "done": False}])
+        self.assertEqual([p.name for p in Path(self.tmp.name).iterdir()], ["todos.json"])
+
 
 if __name__ == "__main__":
     unittest.main()

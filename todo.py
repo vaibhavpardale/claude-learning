@@ -1,17 +1,41 @@
 """Tiny to-do CLI. Usage: python3 todo.py add "buy milk" | list | done 1 | remove 1 | clear"""
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 FILE = Path(__file__).with_name("todos.json")
 
 
 def load():
-    return json.loads(FILE.read_text()) if FILE.exists() else []
+    if not FILE.exists():
+        return []
+    try:
+        data = json.loads(FILE.read_text())
+    except json.JSONDecodeError:
+        # Stop instead of crashing, and leave the file alone so nothing is lost.
+        sys.exit(f"{FILE.name} is not valid JSON. Fix it or delete it, then try again.")
+    if not isinstance(data, list):
+        sys.exit(f"{FILE.name} should contain a list of tasks. Fix it or delete it, then try again.")
+    # Fill in missing fields so older or hand-edited entries don't crash the commands.
+    return [
+        {"text": str(t.get("text", "")), "done": bool(t.get("done", False))}
+        for t in data
+    ]
 
 
 def save(todos):
-    FILE.write_text(json.dumps(todos, indent=2))
+    # Write to a temporary file first, then swap it in. If the program stops
+    # mid-write, the old todos.json is still intact.
+    fd, tmp_name = tempfile.mkstemp(dir=FILE.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(todos, f, indent=2)
+        os.replace(tmp_name, FILE)
+    except BaseException:
+        os.unlink(tmp_name)
+        raise
 
 
 def main(args):
