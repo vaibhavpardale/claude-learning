@@ -46,6 +46,23 @@ def today():
     return date.today()
 
 
+def add_task(text, due=None):
+    """Save a new task. Raises ValueError if the text is empty or the due date is bad."""
+    text = text.strip()
+    if not text:
+        raise ValueError('Please give a task, e.g. add "buy milk"')
+    task = {"text": text, "done": False}
+    if due:
+        try:
+            task["due"] = date.fromisoformat(due).isoformat()
+        except ValueError:
+            raise ValueError(f"Invalid date '{due}'. Use YYYY-MM-DD, e.g. 2026-10-20")
+    todos = load()
+    todos.append(task)
+    save(todos)
+    return task
+
+
 def main(args):
     todos = load()
     if not args or args[0] == "list":
@@ -66,20 +83,12 @@ def main(args):
             if i + 1 >= len(words):
                 print("Please give a date after --due, e.g. --due 2026-10-20")
                 return
-            try:
-                due = date.fromisoformat(words[i + 1])
-            except ValueError:
-                print(f"Invalid date '{words[i + 1]}'. Use YYYY-MM-DD, e.g. 2026-10-20")
-                return
+            due = words[i + 1]
             del words[i:i + 2]
-        if not words:
-            print('Please give a task, e.g. add "buy milk"')
-            return
-        task = {"text": " ".join(words), "done": False}
-        if due is not None:
-            task["due"] = due.isoformat()
-        todos.append(task)
-        save(todos)
+        try:
+            add_task(" ".join(words), due)
+        except ValueError as error:
+            print(error)
     elif args[0] == "clear":
         todos = [t for t in todos if not t["done"]]
         save(todos)

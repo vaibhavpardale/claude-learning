@@ -82,12 +82,58 @@ class HttpTests(unittest.TestCase):
             self.get("/nope")
         self.assertEqual(caught.exception.code, 404)
 
-    def test_write_requests_are_refused(self):
-        request = urllib.request.Request(self.base + "/api/tasks", data=b"{}", method="POST")
+    def post(self, body, content_type="application/json"):
+        request = urllib.request.Request(
+            self.base + "/api/tasks",
+            data=body,
+            method="POST",
+            headers={"Content-Type": content_type},
+        )
+        try:
+            with urllib.request.urlopen(request) as response:
+                return response.status, json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read())
+
+    def test_post_adds_task_and_returns_list(self):
+        status, tasks = self.post(json.dumps({"text": "pay rent", "due": "2026-10-20"}).encode())
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(self.file.read_text())[-1], {"text": "pay rent", "done": False, "due": "2026-10-20"})
+        self.assertEqual([t["text"] for t in tasks], ["buy milk", "pay rent"])
+
+    def test_post_without_due_date(self):
+        status, _ = self.post(json.dumps({"text": "walk dog", "due": None}).encode())
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(self.file.read_text())[-1], {"text": "walk dog", "done": False})
+
+    def test_post_empty_text_is_refused(self):
+        status, body = self.post(json.dumps({"text": "   "}).encode())
+        self.assertEqual(status, 400)
+        self.assertIn("Please give a task", body["error"])
+        self.assertEqual(len(json.loads(self.file.read_text())), 1)
+
+    def test_post_bad_date_is_refused(self):
+        status, body = self.post(json.dumps({"text": "x", "due": "tomorrow"}).encode())
+        self.assertEqual(status, 400)
+        self.assertIn("Invalid date", body["error"])
+        self.assertEqual(len(json.loads(self.file.read_text())), 1)
+
+    def test_post_must_be_json(self):
+        # A form posted from another site arrives as text/plain, so it is refused.
+        status, _ = self.post(b"text=pay+rent", content_type="text/plain")
+        self.assertEqual(status, 415)
+        self.assertEqual(len(json.loads(self.file.read_text())), 1)
+
+    def test_post_with_bad_json_is_refused(self):
+        status, _ = self.post(b"{not json")
+        self.assertEqual(status, 400)
+
+    def test_other_methods_are_refused(self):
+        request = urllib.request.Request(self.base + "/api/tasks", method="DELETE")
         with self.assertRaises(urllib.error.HTTPError) as caught:
             urllib.request.urlopen(request)
         self.assertEqual(caught.exception.code, 501)
-        self.assertEqual(json.loads(self.file.read_text()), [{"text": "buy milk", "done": False}])
+        self.assertEqual(len(json.loads(self.file.read_text())), 1)
 
 
 if __name__ == "__main__":

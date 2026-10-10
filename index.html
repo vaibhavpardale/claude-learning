@@ -57,11 +57,22 @@
     .badge { font-size: 0.75rem; font-weight: 600; color: var(--overdue); background: var(--overdue-bg); padding: 0.1rem 0.5rem; border-radius: 999px; white-space: nowrap; }
     .note { color: var(--muted); padding: 1rem; margin: 0; }
     .error { color: var(--overdue); padding: 1rem; margin: 0; }
+    form { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+    input { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 0.5rem 0.75rem; }
+    input[name="text"] { flex: 1 1 14rem; min-width: 0; }
+    button { font: inherit; font-weight: 600; color: var(--card); background: var(--text); border: none; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; }
+    .form-error { color: var(--overdue); margin: 0; width: 100%; }
   </style>
 </head>
 <body>
   <main>
     <h1>My To-Dos</h1>
+    <form id="add-form">
+      <input name="text" placeholder="New task" aria-label="New task" autocomplete="off" required>
+      <input name="due" type="date" aria-label="Due date">
+      <button type="submit">Add</button>
+      <p id="form-error" class="form-error" role="alert"></p>
+    </form>
     <ul id="tasks"></ul>
   </main>
   <script>
@@ -112,18 +123,46 @@
       });
     }
 
+    function showTasks(response, data) {
+      if (!response.ok) {
+        list.replaceChildren(row(data.error || "Could not load tasks.", "error"));
+        return;
+      }
+      render(data);
+    }
+
     fetch("/api/tasks")
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) {
-          list.replaceChildren(row(data.error || "Could not load tasks.", "error"));
-          return;
-        }
-        render(data);
-      })
+      .then(async (response) => showTasks(response, await response.json()))
       .catch(() => {
         list.replaceChildren(row("Could not reach the server.", "error"));
       });
+
+    const form = document.getElementById("add-form");
+    const formError = document.getElementById("form-error");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      formError.textContent = "";
+      const text = form.elements.text.value.trim();
+      const due = form.elements.due.value;
+      try {
+        const response = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, due: due || null }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          formError.textContent = data.error || "Could not add the task.";
+          return;
+        }
+        form.reset();
+        render(data);
+        form.elements.text.focus();
+      } catch (error) {
+        formError.textContent = "Could not reach the server.";
+      }
+    });
   </script>
 </body>
 </html>
