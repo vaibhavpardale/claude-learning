@@ -2,7 +2,7 @@
 - Tiny Python to-do CLI (`todo.py`), data stored in `todos.json`.
 - Keep it dependency-free (standard library only).
 - Run with: `python3 todo.py list`
-- Always run the tests after changing todo.py (`python3 -m unittest test_todo -v`).
+- Always run the tests after changing todo.py (`python3 -m unittest -v`).
 
 ## How to run the course (LESSONS.md + PROGRESS.md)
 - This folder is a guided course. The learner is a beginner; explain in plain words.

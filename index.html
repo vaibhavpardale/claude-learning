@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My To-Dos</title>
+  <style>
+    :root {
+      --bg: #f7f7f5;
+      --card: #ffffff;
+      --text: #1d1d1b;
+      --muted: #6b6b66;
+      --line: #e3e3de;
+      --overdue: #b42318;
+      --overdue-bg: #fde8e6;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #171715;
+        --card: #222220;
+        --text: #ecece8;
+        --muted: #a0a09a;
+        --line: #3a3a36;
+        --overdue: #ff8a80;
+        --overdue-bg: #3d1f1c;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #171715;
+      --card: #222220;
+      --text: #ecece8;
+      --muted: #a0a09a;
+      --line: #3a3a36;
+      --overdue: #ff8a80;
+      --overdue-bg: #3d1f1c;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+    main {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 2rem 16px;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+    ul { list-style: none; padding: 0; margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+    li { display: flex; align-items: baseline; gap: 0.75rem; padding: 0.75rem 1rem; border-top: 1px solid var(--line); }
+    li:first-child { border-top: none; }
+    .box { font-family: ui-monospace, Menlo, monospace; color: var(--muted); }
+    .done .text { text-decoration: line-through; color: var(--muted); }
+    .text { flex: 1; overflow-wrap: anywhere; }
+    .due { color: var(--muted); font-size: 0.9rem; white-space: nowrap; }
+    .badge { font-size: 0.75rem; font-weight: 600; color: var(--overdue); background: var(--overdue-bg); padding: 0.1rem 0.5rem; border-radius: 999px; white-space: nowrap; }
+    .note { color: var(--muted); padding: 1rem; margin: 0; }
+    .error { color: var(--overdue); padding: 1rem; margin: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>My To-Dos</h1>
+    <ul id="tasks"></ul>
+  </main>
+  <script>
+    const list = document.getElementById("tasks");
+
+    function row(text, className) {
+      const li = document.createElement("li");
+      li.className = className || "";
+      const el = document.createElement("span");
+      el.textContent = text;
+      li.appendChild(el);
+      return li;
+    }
+
+    function render(tasks) {
+      list.replaceChildren();
+      if (tasks.length === 0) {
+        list.appendChild(row("Nothing to do!", "note"));
+        return;
+      }
+      tasks.forEach((task, index) => {
+        const li = document.createElement("li");
+        li.className = task.done ? "done" : "";
+
+        const box = document.createElement("span");
+        box.className = "box";
+        box.textContent = `${index + 1}. [${task.done ? "x" : " "}]`;
+
+        const text = document.createElement("span");
+        text.className = "text";
+        text.textContent = task.text;
+
+        li.append(box, text);
+
+        if (task.due) {
+          const due = document.createElement("span");
+          due.className = "due";
+          due.textContent = `due ${task.due}`;
+          li.appendChild(due);
+        }
+        if (task.overdue) {
+          const badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = "OVERDUE";
+          li.appendChild(badge);
+        }
+        list.appendChild(li);
+      });
+    }
+
+    fetch("/api/tasks")
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) {
+          list.replaceChildren(row(data.error || "Could not load tasks.", "error"));
+          return;
+        }
+        render(data);
+      })
+      .catch(() => {
+        list.replaceChildren(row("Could not reach the server.", "error"));
+      });
+  </script>
+</body>
+</html>
