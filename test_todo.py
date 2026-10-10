@@ -1,7 +1,10 @@
 """Tests for todo.py. Run with: python3 -m unittest test_todo -v"""
+import contextlib
+import io
 import json
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -68,6 +71,61 @@ class TodoTests(unittest.TestCase):
     def test_save_leaves_no_temp_files(self):
         todo.main(["add", "buy milk"])
         self.assertEqual([p.name for p in Path(self.tmp.name).iterdir()], ["todos.json"])
+
+    def run_list(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            todo.main(["list"])
+        return out.getvalue()
+
+    def test_add_with_due_date(self):
+        todo.main(["add", "buy", "milk", "--due", "2026-10-20"])
+        self.assertEqual(self.read_todos(), [{"text": "buy milk", "done": False, "due": "2026-10-20"}])
+
+    def test_due_flag_can_come_before_text(self):
+        todo.main(["add", "--due", "2026-10-20", "buy", "milk"])
+        self.assertEqual(self.read_todos(), [{"text": "buy milk", "done": False, "due": "2026-10-20"}])
+
+    def test_invalid_due_date_saves_nothing(self):
+        todo.main(["add", "buy milk", "--due", "tomorrow"])
+        self.assertFalse(self.file.exists())
+
+    def test_due_flag_without_value_saves_nothing(self):
+        todo.main(["add", "buy milk", "--due"])
+        self.assertFalse(self.file.exists())
+
+    def test_add_without_text_saves_nothing(self):
+        todo.main(["add", "--due", "2026-10-20"])
+        self.assertFalse(self.file.exists())
+
+    def test_list_shows_due_date(self):
+        self.file.write_text(json.dumps([{"text": "buy milk", "done": False, "due": "2026-10-20"}]))
+        with mock.patch("todo.today", return_value=date(2026, 10, 10)):
+            self.assertEqual(self.run_list(), "1. [ ] buy milk (due 2026-10-20)\n")
+
+    def test_list_marks_overdue_unfinished_task(self):
+        self.file.write_text(json.dumps([{"text": "pay rent", "done": False, "due": "2026-10-01"}]))
+        with mock.patch("todo.today", return_value=date(2026, 10, 10)):
+            self.assertIn("OVERDUE", self.run_list())
+
+    def test_list_does_not_mark_finished_task_overdue(self):
+        self.file.write_text(json.dumps([{"text": "pay rent", "done": True, "due": "2026-10-01"}]))
+        with mock.patch("todo.today", return_value=date(2026, 10, 10)):
+            self.assertNotIn("OVERDUE", self.run_list())
+
+    def test_list_does_not_mark_future_task_overdue(self):
+        self.file.write_text(json.dumps([{"text": "pay rent", "done": False, "due": "2026-10-20"}]))
+        with mock.patch("todo.today", return_value=date(2026, 10, 10)):
+            self.assertNotIn("OVERDUE", self.run_list())
+
+    def test_due_date_survives_save_and_load(self):
+        todo.main(["add", "pay rent", "--due", "2026-10-01"])
+        todo.main(["add", "buy milk"])
+        todo.main(["done", "2"])
+        self.assertEqual(self.read_todos(), [
+            {"text": "pay rent", "done": False, "due": "2026-10-01"},
+            {"text": "buy milk", "done": True},
+        ])
 
     def test_failed_save_keeps_old_file(self):
         todo.main(["add", "keep me"])
